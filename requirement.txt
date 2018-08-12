@@ -1,0 +1,6 @@
+librosa==0.6.2
+numpy
+keras==2.1.2
+h5py==2.7.1
+scikit-learn
+tensorflow==1.7.0
