@@ -1,48 +1,7 @@
 import numpy as np
 import keras
-from conf import conf
-import h5py
-from sklearn.model_selection import train_test_split
-import os
-
-
-def get_training_desc():
-    # TODO: add log for which data folder it get for training
-    # a sliding window implementation to get most recent 500,000 self-play games
-    all_files = []
-    n_game = 0
-    self_play_best_model_dir = None
-    while n_game < conf['N_MOST_RECENT_GAMES']:
-        self_play_best_model_dir = get_prev_self_play_model_dir(self_play_best_model_dir)
-        if self_play_best_model_dir is None:
-            if n_game == 0: # Found no game data at all
-                raise FileNotFoundError("Can not find self-play directory")
-            print("Total games for training per epoch", n_game)
-            break
-        n_game += len(os.listdir(self_play_best_model_dir))
-        print("Reading training data from ", self_play_best_model_dir)
-        for root, dirs, files in os.walk(self_play_best_model_dir):
-            for f in files:
-                full_filename = os.path.join(root, f)
-                all_files.append(full_filename)
-        # look for data in extra training folder
-        extra_dirs = conf['EXTRA_TRAINING_DATA_DIR']
-        for extra_dir in extra_dirs:
-            extra_full_dir = os.path.join(extra_dir, self_play_best_model_dir.split("/")[-1])
-            if os.path.isdir(extra_full_dir):
-                print("Found extra training data dir:", extra_full_dir)
-                n_game += len(os.listdir(extra_full_dir))
-                for root, dirs, files in os.walk(extra_full_dir):
-                    for f in files:
-                        full_filename = os.path.join(root, f)
-                        all_files.append(full_filename)
-
-
-    x_train, x_test = train_test_split(all_files, test_size=0.1, random_state=2)
-    #  clean up old data that not longer needed for training
-    clean_unused_self_play_data(self_play_best_model_dir)
-    return {'train': x_train, 'validation': x_test}
-
+from sklearn.preprocessing import LabelEncoder
+import librosa
 
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
@@ -74,22 +33,18 @@ class DataGenerator(keras.utils.Sequence):
             np.random.shuffle(self.indexes)
 
     def __data_generation(self, list_IDs_batch):
-        SIZE = conf['SIZE']
-        X = np.zeros((self.batch_size, *self.dim))
-        policy_y = np.zeros((self.batch_size, 1))
-        value_y = np.zeros((self.batch_size, SIZE * SIZE + 1))
-        for j, filename in enumerate(list_IDs_batch):
+        X = np.empty((self.batch_size, *self.dim))
+        y = np.empty((self.batch_size, ), dtype=int)
+        for i, filename in enumerate(list_IDs_batch):
             try:
-                with h5py.File(filename) as f:
-                    board = f['board'][:]
-                    policy = f['policy_target'][:]
-                    value_target = f['value_target'][()]
-                    X[j] = board
-                    policy_y[j] = value_target
-                    value_y[j] = policy
-                    f.close()
-            except:
+                x, sample_rate = librosa.load(filename, res_type='kaiser_fast')
+                X[i, ] = np.mean(librosa.feature.mfcc(y=x, sr=sample_rate, n_mfcc=40).T, axis=0)
+                y[i] = self.labels[filename]
+            except Exception as e:
                 print("Exception while reading", filename, " skipping it")
+                print(e.message)
                 continue
-
-        return X, [value_y, policy_y]
+        encoder = LabelEncoder()
+        y2 = encoder.fit_transform(y)
+        Y = keras.utils.to_categorical(y2, num_classes=self.n_classes)
+        return X, Y
