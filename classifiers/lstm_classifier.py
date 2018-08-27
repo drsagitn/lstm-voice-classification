@@ -1,11 +1,10 @@
 import os
 from keras.layers import Dense, Activation, Dropout
 from keras.models import Sequential
-from keras.callbacks import ModelCheckpoint
 from sklearn.model_selection import train_test_split
 from classifiers.lstm_data_generator import DataGenerator
 from keras.layers.recurrent import LSTM
-
+from keras.models import load_model
 
 class LSTMVoiceGenderClassifier(object):
     def __init__(self):
@@ -14,7 +13,7 @@ class LSTMVoiceGenderClassifier(object):
         self.nb_classes = 2
         self.batch_size = 32
         self.input_dim = (self.batch_size, 40, )
-        self.num_epochs = 100
+        self.num_epochs = 10
         self.data_train_dir = "data/train"
         self.model_weight_file = "models/voice_gender_classifier.weight"
 
@@ -28,14 +27,16 @@ class LSTMVoiceGenderClassifier(object):
         model.add(Dense(self.nb_classes))
         model.add(Activation('softmax'))
 
-        model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
+
         return model
 
     def load_model(self):
-        model = self.create_model()
         if os.path.isfile(self.model_weight_file):
             print("Loading model weight...!!")
-            model.load_weights(self.model_weight_file)
+            model = load_model(self.model_weight_file)
+        else:
+            model = self.create_model()
+        model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
         return model
 
     def get_training_desc(self):
@@ -62,11 +63,10 @@ class LSTMVoiceGenderClassifier(object):
                   'shuffle': True}
         training_generator = DataGenerator(partition['train'], labels, **params)
         validation_generator = DataGenerator(partition['validation'], labels, **params)
-        checkpoint = ModelCheckpoint(filepath=self.model_weight_file, save_best_only=True)
         self.model = self.load_model()
         if not self.model:
             print("Cannot load model")
             return
         self.model.fit_generator(generator=training_generator, epochs=self.num_epochs, verbose=1,
-                                           validation_data=validation_generator, callbacks=[checkpoint])
-        self.model.save_weights(self.model_weight_file)
+                                           validation_data=validation_generator, callbacks=[])
+        self.model.save(self.model_weight_file)

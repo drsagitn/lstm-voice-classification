@@ -3,4 +3,4 @@ numpy==1.14.3
 keras==2.1.2
 h5py==2.7.1
 scikit-learn
-tensorflow==1.4.0
+tensorflow-gpu==1.4.0
