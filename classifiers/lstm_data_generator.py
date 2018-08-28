@@ -38,7 +38,7 @@ class DataGenerator(keras.utils.Sequence):
         for i, filename in enumerate(list_IDs_batch):
             try:
                 x, sample_rate = librosa.load(filename, res_type='kaiser_fast')
-                X[i, ] = np.mean(librosa.feature.mfcc(y=x, sr=sample_rate, n_mfcc=40).T, axis=0)
+                X[i, ] = np.mean(librosa.feature.mfcc(y=x, sr=sample_rate, n_mfcc=40).T, axis=0).reshape(40,1)
                 y[i] = self.labels[filename]
             except Exception as e:
                 print("Exception while reading", filename, " skipping it")
