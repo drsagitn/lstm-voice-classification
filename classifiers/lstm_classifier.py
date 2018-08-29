@@ -4,7 +4,9 @@ from keras.models import Sequential
 from sklearn.model_selection import train_test_split
 from classifiers.lstm_data_generator import DataGenerator
 from keras.layers.recurrent import LSTM
+from keras.layers import CuDNNLSTM
 from keras.models import load_model
+import tensorflow as tf
 
 class LSTMVoiceGenderClassifier(object):
     def __init__(self):
@@ -21,20 +23,21 @@ class LSTMVoiceGenderClassifier(object):
         print("Building LSTM model....")
         model = Sequential()
         model.add(
-            LSTM(units=self.hidden_unit, batch_input_shape=(self.batch_size, *self.input_dim), return_sequences=False))
+            CuDNNLSTM(units=self.hidden_unit, batch_input_shape=(self.batch_size, *self.input_dim), return_sequences=False))
         model.add(Dense(512, activation='relu'))
-        model.add(Dropout(0.5))
+        # model.add(Dropout(0.5))
         model.add(Dense(self.nb_classes))
         model.add(Activation('softmax'))
         return model
 
     def load_model(self):
-        if os.path.isfile(self.model_weight_file):
-            print("Loading model weight...!!")
-            model = load_model(self.model_weight_file)
-        else:
-            model = self.create_model()
-        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+        with tf.device('/gpu:0'):
+            if os.path.isfile(self.model_weight_file):
+                print("Loading model weight...!!")
+                model = load_model(self.model_weight_file)
+            else:
+                model = self.create_model()
+            model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         return model
 
     def get_training_desc(self):
@@ -50,7 +53,7 @@ class LSTMVoiceGenderClassifier(object):
                 file_path_list.append(full_file_path)
                 labels[full_file_path] = label
 
-        x_train, x_test = train_test_split(file_path_list, test_size=0.2, random_state=2)
+        x_train, x_test = train_test_split(file_path_list, test_size=0, random_state=2)
         return {'train': x_train, 'validation': x_test}, labels
 
     def fit(self):
@@ -65,6 +68,5 @@ class LSTMVoiceGenderClassifier(object):
         if not self.model:
             print("Cannot load model")
             return
-        self.model.fit_generator(generator=training_generator, epochs=self.num_epochs, verbose=1,
-                                           validation_data=validation_generator, callbacks=[])
+        self.model.fit_generator(generator=training_generator, epochs=self.num_epochs, verbose=1)
         self.model.save(self.model_weight_file)
